@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>中文名转英文名生成器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Microsoft YaHei', sans-serif;
+        }
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            background-color: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 800px;
+            padding: 30px;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        .input-section {
+            display: flex;
+            margin-bottom: 30px;
+        }
+        input {
+            flex: 1;
+            padding: 12px 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px 0 0 5px;
+            font-size: 16px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        input:focus {
+            border-color: #4a90e2;
+        }
+        button {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 0 5px 5px 0;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #357abd;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .results {
+            display: none;
+            margin-top: 20px;
+        }
+        .name-card {
+            background-color: #f9f9f9;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 5px solid #4a90e2;
+        }
+        .english-name {
+            font-size: 24px;
+            color: #4a90e2;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .meaning {
+            margin-bottom: 15px;
+            line-height: 1.6;
+        }
+        .meaning h3 {
+            font-size: 18px;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        .meaning p {
+            color: #666;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 20px 0;
+        }
+        .spinner {
+            border: 4px solid rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            border-top: 4px solid #4a90e2;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            color: #e74c3c;
+            text-align: center;
+            margin-top: 20px;
+            display: none;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>中文名转英文名生成器</h1>
+        <p style="text-align: center; margin-bottom: 20px; color: #666;">输入您的中文名，我们将为您生成三个保留您姓氏的英文名</p>
+        <p style="text-align: center; margin-bottom: 20px; color: #666; font-size: 14px;">本工具会智能分析您的中文姓名，提取姓氏并保留在生成的英文名中</p>
+        
+        <div class="input-section">
+            <input type="text" id="chineseName" placeholder="请输入您的完整中文姓名（如：张三、李四）" />
+            <button id="generateBtn">生成英文名</button>
+        </div>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>正在生成英文名，请稍候...</p>
+        </div>
+        
+        <div class="error" id="error"></div>
+        
+        <div class="results" id="results"></div>
+        
+        <div class="footer">
+            <p>© 2023 中文名转英文名生成器 | 由 DeepSeek AI 提供技术支持</p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const chineseNameInput = document.getElementById('chineseName');
+            const generateBtn = document.getElementById('generateBtn');
+            const resultsDiv = document.getElementById('results');
+            const loadingDiv = document.getElementById('loading');
+            const errorDiv = document.getElementById('error');
+            
+            // DeepSeek API 配置
+            const apiConfig = {
+                baseURL: 'https://api.deepseek.com/v1',
+                apiKey: 'sk-ba2b7036947d46b8b0e71344d781a1b1',
+                model: 'deepseek-chat'
+            };
+            
+            generateBtn.addEventListener('click', generateEnglishNames);
+            
+            async function generateEnglishNames() {
+                const chineseName = chineseNameInput.value.trim();
+                
+                if (!chineseName) {
+                    showError('请输入您的中文名');
+                    return;
+                }
+                
+                // 显示加载状态
+                generateBtn.disabled = true;
+                loadingDiv.style.display = 'block';
+                resultsDiv.style.display = 'none';
+                errorDiv.style.display = 'none';
+                
+                // 提取中文姓氏
+                // 通常中文姓氏为名字的第一个字，复姓为前两个字
+                let familyName = '';
+                let givenName = '';
+                
+                // 常见的中文复姓列表
+                const compoundSurnames = [
+                    '欧阳', '太史', '端木', '上官', '司马', '东方', '独孤', '南宫', '万俟', '闻人',
+                    '夏侯', '诸葛', '尉迟', '公羊', '赫连', '澹台', '皇甫', '宗政', '濮阳', '公冶',
+                    '太叔', '申屠', '公孙', '慕容', '仲孙', '钟离', '长孙', '宇文', '司徒', '鲜于',
+                    '司空', '闾丘', '子车', '亓官', '司寇', '巫马', '公西', '颛孙', '壤驷', '公良',
+                    '漆雕', '乐正', '宰父', '谷梁', '拓跋', '夹谷', '轩辕', '令狐', '段干', '百里',
+                    '呼延', '东郭', '南门', '羊舌', '微生', '公户', '公玉', '公仪', '梁丘', '公仲',
+                    '公上', '公门', '公山', '公坚', '左丘', '公伯', '西门', '公祖', '第五', '公乘',
+                    '贯丘', '公皙', '南荣', '东里', '东宫', '仲长', '子书', '子桑', '即墨', '达奚',
+                    '褚师'
+                ];
+                
+                // 检查是否为复姓
+                let isCompoundSurname = false;
+                if (chineseName.length >= 2) {
+                    const possibleCompoundSurname = chineseName.substring(0, 2);
+                    if (compoundSurnames.includes(possibleCompoundSurname)) {
+                        familyName = possibleCompoundSurname;
+                        givenName = chineseName.substring(2);
+                        isCompoundSurname = true;
+                    }
+                }
+                
+                // 如果不是复姓，则取第一个字为姓
+                if (!isCompoundSurname) {
+                    familyName = chineseName.substring(0, 1);
+                    givenName = chineseName.substring(1);
+                }
+                
+                try {
+                    const prompt = `我的中文名是"${chineseName}"，其中姓氏是"${familyName}"，名字是"${givenName}"。请为我生成三个保留我原有姓氏的英文名。
+
+每个英文名都应该：
+1. 保留我的中文姓氏"${familyName}"的发音，将其转换为英文拼写（例如：姓"张"可转为"Zhang"，姓"李"可转为"Li"等）
+2. 为我的名字部分"${givenName}"选择一个有趣且富有文化内涵的英文名
+3. 最终格式应为：[姓氏的英文拼写] [英文名]（例如：Zhang William）
+4. 体现西方文化，并给出详细的中英文寓意解释
+
+请按照以下JSON格式返回结果：
+{
+  "names": [
+    {
+      "english_name": "姓氏的英文拼写 英文名1",
+      "english_meaning": "英文名1的英文寓意解释",
+      "chinese_meaning": "英文名1的中文寓意解释"
+    },
+    {
+      "english_name": "姓氏的英文拼写 英文名2",
+      "english_meaning": "英文名2的英文寓意解释",
+      "chinese_meaning": "英文名2的中文寓意解释"
+    },
+    {
+      "english_name": "姓氏的英文拼写 英文名3",
+      "english_meaning": "英文名3的英文寓意解释",
+      "chinese_meaning": "英文名3的中文寓意解释"
+    }
+  ]
+}`;
+                    
+                    const response = await fetch(apiConfig.baseURL + '/chat/completions', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${apiConfig.apiKey}`
+                        },
+                        body: JSON.stringify({
+                            model: apiConfig.model,
+                            messages: [
+                                {
+                                    role: 'user',
+                                    content: prompt
+                                }
+                            ],
+                            temperature: 0.7
+                        })
+                    });
+                    
+                    if (!response.ok) {
+                        if (response.status === 401) {
+                            throw new Error(`API请求失败: 401 未授权 - 请检查您的API密钥是否有效`);
+                        } else {
+                            throw new Error(`API请求失败: ${response.status}`);
+                        }
+                    }
+                    
+                    const data = await response.json();
+                    const content = data.choices[0].message.content;
+                    
+                    // 提取JSON部分
+                    const jsonMatch = content.match(/\{[\s\S]*\}/);
+                    if (!jsonMatch) {
+                        throw new Error('无法解析API返回的结果');
+                    }
+                    
+                    const namesData = JSON.parse(jsonMatch[0]);
+                    displayResults(namesData.names);
+                    
+                } catch (error) {
+                    console.error('Error:', error);
+                    showError('生成英文名时出错: ' + error.message);
+                } finally {
+                    generateBtn.disabled = false;
+                    loadingDiv.style.display = 'none';
+                }
+            }
+            
+            function displayResults(names) {
+                resultsDiv.innerHTML = '';
+                
+                names.forEach(name => {
+                    const nameCard = document.createElement('div');
+                    nameCard.className = 'name-card';
+                    
+                    nameCard.innerHTML = `
+                        <div class="english-name">${name.english_name}</div>
+                        <div class="meaning">
+                            <h3>英文寓意</h3>
+                            <p>${name.english_meaning}</p>
+                        </div>
+                        <div class="meaning">
+                            <h3>中文寓意</h3>
+                            <p>${name.chinese_meaning}</p>
+                        </div>
+                    `;
+                    
+                    resultsDiv.appendChild(nameCard);
+                });
+                
+                resultsDiv.style.display = 'block';
+            }
+            
+            function showError(message) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+            }
+        });
+    </script>
+</body>
+</html>
